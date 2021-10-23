@@ -8,6 +8,22 @@ output: github_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(patchwork)
+
+knitr::opts_chunk$set(
+  fig.width = 6, 
+  fig.asp = .6, 
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.colour = "viridis"
+)
+
+scale_colour_discrete = scale_color_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
 ```
 
 
@@ -41,6 +57,8 @@ weather_df %>%
 
 ## count some things 
 
+Counting month observations 
+
 ```{r}
 weather_df %>% 
   group_by(month) %>% 
@@ -49,51 +67,108 @@ weather_df %>%
 weather_df %>% 
   count(name)
 ```
-
-It's nice that summarize produces a data frame 
-
+we can use count 
 ```{r}
 weather_df %>% 
-  pull(name) %>% 
-  table() 
+  count(month, name = "n_obs")
 ```
 
+**NEVER** USE BASE R's `TABLE`
 
-```{r}
+```{r, eval = FALSE}
 weather_df %>% 
-  janitor::tabyl(month, name)
+  pull(month)
+  table()
 ```
 
-## More general summaries 
+Other helpful counter
+```{r}
+weather_df %>% 
+  group_by(month) %>% 
+  summarize(n_obs = n(),
+            n_days = n_distinct(date))
+```
 
-Let's count, take means, look at SDs...
+## A digression on 2x2 tables
 
 ```{r}
 weather_df %>% 
-  group_by(name) %>% 
-  summarize(
-    n_obs = n(),
-    mean_tmax = mean(tmax, na.rm = TRUE),
-    medain_tmax = median(tmax, na.rm = TRUE), 
-    sd_tmax = sd(tmax, na.rm = TRUE), 
+  filter(name != "Waikiki_HA") %>% 
+  mutate(
+    cold = case_when(
+      tmax < 5 ~ "cold", 
+      tmax >= 5 ~ "not_cold",
+      TRUE    ~""
+    )
   ) %>% 
-  ggplot(aes(x = date, y = mean_tmax, color = name)) +
-  geom_point() +
+  group_by(name, cold) %>% 
+  summarize(count = n())
+```
+```{r}
+weather_df %>% 
+  filter(name != "Waikiki_HA") %>% 
+  mutate(
+    cold = case_when(
+      tmax < 5 ~ "cold", 
+      tmax >= 5 ~ "not_cold",
+      TRUE    ~""
+    )
+  ) %>% 
+  janitor::tabyl(name, cold)
+```
+
+## General summaries 
+
+It's nice that summarize produces a data frame
+
+```{r}
+weather_df %>% 
+  group_by(name,month) %>% 
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE),
+    mean_prcp = mean(prcp, na.rm = TRUE), 
+    medain_tmin = median(tmin, na.rm = TRUE)
+  )
+```
+
+This is a dataframe! So we can make a plot. 
+
+```{r}
+weather_df %>% 
+  group_by(name, month) %>% 
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE),
+    mean_prcp = mean(prcp, na.rm = TRUE), 
+    medain_tmin = median(tmin, na.rm = TRUE)
+  ) %>% 
+  ggplot(aes(x = month, y = mean_tmax, color = name)) +
+  geom_point() + 
   geom_line()
 ```
-Formatting table outputs
+
+Suppose you want to summarize many columns. 
 
 ```{r}
 weather_df %>% 
-  group_by(name) %>% 
-  summarize(
-    n_obs = n(),
-    mean_tmax = mean(tmax, na.rm = TRUE)
-  ) %>% 
-  knitr::kable(digits = 2)
+  group_by(name, month) %>% 
+  summarize(across(prcp:tmin, mean))
 ```
 
-## grouped `mutate`
+Reminder: sometimes your results are easier to read in another format. 
+
+```{r}
+weather_df %>% 
+  group_by(name, month) %>% 
+  summarize(mean_tmax = mean(tmax)) %>% 
+  pivot_wider(
+    names_from = name, 
+    values_from = mean_tmax
+  ) %>% 
+  knitr::kable(digits = 1)
+```
+
+
+## `group by` and `mutate`
 
 ```{r}
 weather_df %>% 
@@ -106,6 +181,16 @@ weather_df %>%
   geom_point()
 ```
 
+what about window functions 
+
+ranking....
+
+```{r}
+weather_df %>% 
+  group_by(name, month) %>% 
+  mutate(temp_rank = min_rank(tmax))
+```
+
 ```{r}
 weather_df %>% 
   group_by(name) %>% 
@@ -113,6 +198,18 @@ weather_df %>%
     tmax_rank = min_rank(desc(tmax))
   ) %>% 
   filter(tmax_rank < 2)
+```
+
+lag
+
+```{r}
+weather_df %>% 
+  group_by(name) %>% 
+  mutate(temp_change = tmax - lag(tmax)) %>% 
+  summarize(
+    temp_change_max = max(temp_change, na.rm = TRUE),
+    temp_change_sd = sd(temp_change, na.rm = TRUE)
+  )
 ```
 
 
